@@ -30,6 +30,8 @@ button_font = pg.font.SysFont('Impact' , 50)
 pause_button_font = pg.font.SysFont('Impact' , 40)
 menu_font = pg.font.SysFont('Ink Free' , 70)
 menu_font2 = pg.font.SysFont('Ink Free' , 40)
+menu_font2_back = pg.font.SysFont('Ink Free' , 40)
+menu_font2_back.set_bold(True)
 
 pause_font = pg.font.SysFont('Impact' , 60)
 pause_text_font = pg.font.SysFont('Impact' , 30)
@@ -342,10 +344,14 @@ def menu():
     pg.draw.rect(screen , BLACK , rect1 , 5 , 4)
     screen.blit(menu_text , menu_rect1)
     high_score_text = menu_font2.render('HIGHSCORE:  ' + str(highscore) , 1  , 'orange')
+    high_score_textb = menu_font2_back.render('HIGHSCORE:  ' + str(highscore), 1, BLACK)
     # rect3 = pg.Rect(2, 8, 370, 50)
     # pg.draw.rect(screen, BLACK , rect3 , 0 , 5)
+    rect2b = pg.Rect(5 , 11 , 400 , 50)
+    pg.draw.rect(screen, BLACK, rect2b, 3, 5)
     rect2 = pg.Rect(2 , 8 , 400 , 50)
     pg.draw.rect(screen , 'orange' , rect2 , 3 , 5)
+    screen.blit(high_score_textb, (10, 10))
     screen.blit(high_score_text , (10 , 10))
 
 
