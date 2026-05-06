@@ -1,9 +1,7 @@
 import pygame as pg
 from os.path import join
-import sys
+import sys , os , random , json
 from random import randint
-import random
-import os
 pg.init()
 
 WIDTH , HEIGHT = 1000 , 700
@@ -69,6 +67,7 @@ all_entities = pg.sprite.Group()
 player_group = pg.sprite.Group()
 explosion_entities = pg.sprite.Group()
 trap_entities = pg.sprite.Group()
+preset_texts = pg.sprite.Group()
 
 explosion = pg.image.load(join('Assets/explosion.png'))
 mouse_width , mouse_height = 200 , 60
@@ -98,6 +97,27 @@ highscore_sound = pg.mixer.Sound(join('Assets/highscore.mp3'))
 click_sound = pg.mixer.Sound(join('Assets/click.mp3'))
 menu_music.play(-1)
 
+change_text = options_font1.render('SWITCH', 1, BLACK)
+waiting_text = gameover_text_font.render('Press a key...' , 1 , BLACK)
+waiting_text_rect = waiting_text.get_rect(center = (WIDTH//2 , 440))
+
+rebinding = None
+controls = {
+    "up" : pg.K_w,
+    "down" : pg.K_s,
+    "fire" : pg.K_SPACE,
+    "action" : pg.K_r,
+}
+
+with open('default_preset.json' , 'w') as f:
+    json.dump(controls , f)
+
+try:
+    with open('preset.json' , 'r') as f:
+        controls = json.load(f)
+        custom_preset = True
+except:
+    pass
 
 class Button():
     def __init__(self , width , height , x_pos , y_pos , text_input):
@@ -180,9 +200,9 @@ class Gun(pg.sprite.Sprite):
 
     def update(self):
         keys = pg.key.get_pressed()
-        if keys[pg.K_w] and self.rect.top > 0:
+        if keys[controls['up']] and self.rect.top > 0:
             self.rect.y -= self.speed
-        if keys[pg.K_s] and self.rect.bottom < HEIGHT:
+        if keys[controls['down']] and self.rect.bottom < HEIGHT:
             self.rect.y += self.speed
 
     def draw(self):
@@ -204,9 +224,9 @@ class Player(pg.sprite.Sprite):
 
     def update(self):
         keys = pg.key.get_pressed()
-        if keys[pg.K_w] and self.rect.top > 0:
+        if keys[controls["up"]] and self.rect.top > 0:
             self.rect.y -= self.speed
-        if keys[pg.K_s] and self.rect.bottom < HEIGHT:
+        if keys[controls['down']] and self.rect.bottom < HEIGHT:
             self.rect.y += self.speed
 
     def draw(self):
@@ -293,6 +313,35 @@ class Trap(pg.sprite.Sprite):
     def draw(self):
         screen.blit(self.image , self.rect)
 
+class PresetText(pg.sprite.Sprite):
+    def __init__(self , move , cords , groups):
+        super().__init__(groups)
+        self.move = move
+        self.cords = cords
+        self.key_text = pg.key.name(controls[self.move]).upper()
+
+        self.text = options_font1.render(f'{self.move.upper()} -->  {self.key_text}', 1, "green")
+        self.text_rect = self.text.get_rect(center=cords)
+        self.text_back = options_font1_back.render(f'{self.move.upper()} -->  {self.key_text}', 1, BLACK)
+        self.text_back_rect = self.text_back.get_rect(center=cords)
+
+        self.colour_active = YELLOW
+        self.colour_passive = 'green'
+        self.colour = self.colour_passive
+
+    def update(self):
+        self.key_text = pg.key.name(controls[self.move]).upper()
+        self.text = options_font1.render(f'{self.move.upper()} -->  {self.key_text}', 1, "green")
+        self.text_back = options_font1_back.render(f'{self.move.upper()} -->  {self.key_text}', 1, BLACK)
+        self.text_back_rect = self.text_back.get_rect(center= self.cords)
+
+        screen.blit(self.text_back, self.text_back_rect)
+        screen.blit(self.text, self.text_rect)
+
+        self.change_rect = change_text.get_rect(midleft=(self.text_back_rect.midright))
+        self.change_rect.x += 20
+        pg.draw.rect(screen, self.colour , self.change_rect, 0, 4)
+        screen.blit(change_text, self.change_rect)
 
 def collisions():
     global mouse_count
@@ -354,7 +403,6 @@ def menu():
     screen.blit(high_score_textb, (10, 10))
     screen.blit(high_score_text , (10 , 10))
 
-
     while True:
         clock = pg.time.Clock()
         mouse = pg.mouse.get_pos()
@@ -363,7 +411,7 @@ def menu():
             play_button = Button(150, 60, WIDTH // 2, 290, 'PLAY')
             play_button.changecolour(mouse)
             play_button.update(BLACK)
-            options_button = Button(150, 60, WIDTH // 2, 360, 'INFO')
+            options_button = Button(200, 60, WIDTH // 2, 360, 'OPTIONS')
             options_button.changecolour(mouse)
             options_button.update(BLACK)
             quit_button = Button(150, 60, WIDTH // 2, 430, 'EXIT')
@@ -376,16 +424,17 @@ def menu():
                 sys.exit()
 
             if event.type == pg.MOUSEBUTTONDOWN:
-                if mouse[0] in range(play_button.rect.left , play_button.rect.right) and mouse[1] in range(play_button.rect.top , play_button.rect.bottom):
-                    click_sound.play()
-                    play()
-                if mouse[0] in range(options_button.rect.left , options_button.rect.right) and mouse[1] in range(options_button.rect.top , options_button.rect.bottom):
-                    click_sound.play()
-                    options()
-                if mouse[0] in range(quit_button.rect.left , quit_button.rect.right) and mouse[1] in range(quit_button.rect.top , quit_button.rect.bottom):
-                    click_sound.play()
-                    pg.quit()
-                    sys.exit()
+                if event.button == 1:
+                    if mouse[0] in range(play_button.rect.left , play_button.rect.right) and mouse[1] in range(play_button.rect.top , play_button.rect.bottom):
+                        click_sound.play()
+                        play()
+                    if mouse[0] in range(options_button.rect.left , options_button.rect.right) and mouse[1] in range(options_button.rect.top , options_button.rect.bottom):
+                        click_sound.play()
+                        options()
+                    if mouse[0] in range(quit_button.rect.left , quit_button.rect.right) and mouse[1] in range(quit_button.rect.top , quit_button.rect.bottom):
+                        click_sound.play()
+                        pg.quit()
+                        sys.exit()
 
         clock.tick(60)
         pg.display.flip()
@@ -515,28 +564,29 @@ def play():
                     else:
                         pause = True
                         pg.mixer.music.pause()
-                if event.key == pg.K_SPACE and player.can_shoot:
+                if event.key == controls['fire'] and player.can_shoot:
                     laser_sound.play()
                     laser = Laser(player.rect.midright, (all_entities, laser_entities))
                     player.can_shoot = False
 
-                if event.key == pg.K_r and player.bomb and len(trap_entities) < player.trap_limit and total_score > 200:
+                if event.key == controls['action'] and player.bomb and len(trap_entities) < player.trap_limit and total_score > 200:
                     trap = Trap(player.rect.center , (trap_entities , all_entities))
                     player.bomb = False
 
 
             if event.type == pg.MOUSEBUTTONDOWN and pause:
-                if mouse[0] in range(continue_button.rect.left , continue_button.rect.right) and mouse[1] in range(continue_button.rect.top , continue_button.rect.bottom) and pause:
-                    pause = False
-                    click_sound.play()
-                    pg.mixer.music.unpause()
-                if mouse[0] in range(menu_button.rect.left , menu_button.rect.right) and mouse[1] in range(menu_button.rect.top , menu_button.rect.bottom) and pause:
-                    for entity in all_entities:
-                        entity.kill()
-                    menu_music.play(-1)
-                    click_sound.play()
-                    high_score_notification = False
-                    menu()
+                if event.button == 1:
+                    if mouse[0] in range(continue_button.rect.left , continue_button.rect.right) and mouse[1] in range(continue_button.rect.top , continue_button.rect.bottom) and pause:
+                        pause = False
+                        click_sound.play()
+                        pg.mixer.music.unpause()
+                    if mouse[0] in range(menu_button.rect.left , menu_button.rect.right) and mouse[1] in range(menu_button.rect.top , menu_button.rect.bottom) and pause:
+                        for entity in all_entities:
+                            entity.kill()
+                        menu_music.play(-1)
+                        click_sound.play()
+                        high_score_notification = False
+                        menu()
 
             if event.type == mouse_event1 and total_score < 200:
                 if not pause:
@@ -612,6 +662,43 @@ def options():
     while True:
         clock = pg.time.Clock()
         mouse = pg.mouse.get_pos()
+        click = pg.mouse.get_pressed()[0]
+
+        info_button = Button(150, 60, WIDTH // 2, 290, 'INFO')
+        info_button.changecolour(mouse)
+        info_button.update(BLACK)
+        controls_button = Button(220, 60, WIDTH // 2, 360, 'PRESETS')
+        controls_button.changecolour(mouse)
+        controls_button.update(BLACK)
+        back_button = Button(150, 60, WIDTH // 2, 430, 'BACK')
+        back_button.changecolour(mouse)
+        back_button.update(BLACK)
+
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                pg.quit()
+                sys.exit()
+            if event.type == pg.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    if mouse[0] in range(info_button.rect.left, info_button.rect.right) and mouse[1] in range(info_button.rect.top, info_button.rect.bottom):
+                        click_sound.play()
+                        info()
+                    if mouse[0] in range(controls_button.rect.left, controls_button.rect.right) and mouse[1] in range(controls_button.rect.top, controls_button.rect.bottom):
+                        click_sound.play()
+                        presets()
+                    if mouse[0] in range(back_button.rect.left, back_button.rect.right) and mouse[1] in range(back_button.rect.top, back_button.rect.bottom):
+                        click_sound.play()
+                        menu()
+
+        clock.tick(60)
+        pg.display.flip()
+
+def info():
+    screen.blit(floor , (-20 , -20))
+
+    while True:
+        clock = pg.time.Clock()
+        mouse = pg.mouse.get_pos()
         back_button = Button(150, 60, WIDTH // 2, 650, 'BACK')
         back_button.changecolour(mouse)
         back_button.update(BLACK)
@@ -622,46 +709,14 @@ def options():
                 sys.exit()
 
             if event.type == pg.MOUSEBUTTONDOWN:
-                if mouse[0] in range(back_button.rect.left , back_button.rect.right) and mouse[1] in range(back_button.rect.top , back_button.rect.bottom):
-                    click_sound.play()
-                    menu()
+                if event.button == 1:
+                    if mouse[0] in range(back_button.rect.left , back_button.rect.right) and mouse[1] in range(back_button.rect.top , back_button.rect.bottom):
+                        click_sound.play()
+                        options()
 
         clock.tick(60)
 
-        text1b = gameover_text_font_back.render('Key Controls:' , 1 , BLACK)
-        text1b_rect = text1b.get_rect(center = (120 , 30))
-        screen.blit(text1b , text1b_rect)
-        pg.draw.line(screen , 'orange' , (10 , 55) , (230 , 55) , 5)
-        text2b = options_font1_back.render('W , S :  Player Movement' , 1  , BLACK)
-        text2b_rect = text2b.get_rect(center = (170 , 80))
-        screen.blit(text2b , text2b_rect)
-        text3b = options_font1_back.render('SPACE :  Fire Rat Poison', 1, BLACK)
-        text3b_rect = text3b.get_rect(center = (165, 120))
-        screen.blit(text3b, text3b_rect)
-        text4b = options_font1_back.render('R :  Place Poison Traps', 1, BLACK)
-        text4b_rect = text4b.get_rect(center = (160, 160))
-        screen.blit(text4b, text4b_rect)
-        text5b = options_font1_back.render('Press ESC to pause', 1, BLACK)
-        text5b_rect = text5b.get_rect(center=(140 , 200))
-        screen.blit(text5b, text5b_rect)
 
-
-        text1 = gameover_text_font.render('Key Controls:' , 1 , 'green')
-        text1_rect = text1.get_rect(center = (120 , 30))
-        screen.blit(text1 , text1_rect)
-        pg.draw.line(screen , 'green' , (10 , 55) , (230 , 55) , 5)
-        text2 = options_font1.render('W , S :  Player Movement' , 1  , 'green')
-        text2_rect = text2.get_rect(center = (170 , 80))
-        screen.blit(text2 , text2_rect)
-        text3 = options_font1.render('SPACE :  Fire Rat Poison', 1, 'green')
-        text3_rect = text3.get_rect(center = (165, 120))
-        screen.blit(text3, text3_rect)
-        text4 = options_font1.render('R :  Place Poison Traps', 1, 'green')
-        text4_rect = text4.get_rect(center = (160, 160))
-        screen.blit(text4, text4_rect)
-        text5 = options_font1.render('Press ESC to pause', 1, 'green')
-        text5_rect = text5.get_rect(center=(140 , 200))
-        screen.blit(text5, text5_rect)
 
         stage1b = gameover_text_font_back.render('Stage 1 (0-200):', 1, BLACK)
         stage1b_rect = stage1b.get_rect(center=(135, 300))
@@ -775,6 +830,110 @@ def options():
 
         pg.display.flip()
 
+
+def presets():
+    global rebinding , controls
+    preset_texts.empty()
+    screen.blit(floor, (-20, -20))
+
+    up_text = PresetText('up', (WIDTH//2, 220), preset_texts)
+    down_text = PresetText('down' , (WIDTH//2 , 260) , preset_texts)
+    fire_text = PresetText('fire' , (WIDTH//2 , 300) , preset_texts)
+    action_text = PresetText('action' , (WIDTH//2 , 340) , preset_texts)
+
+    back_button = Button(150, 60, WIDTH // 2, 650, 'BACK')
+    reset_button = Button(300, 60, WIDTH // 2, 580, 'RESET BINDS')
+
+    while True:
+        clock = pg.time.Clock()
+        mouse = pg.mouse.get_pos()
+        screen.blit(floor, (-20, -20))
+
+        back_button.changecolour(mouse)
+        back_button.update(BLACK)
+        reset_button.changecolour(mouse)
+        reset_button.update(BLACK)
+
+        title = gameover_text_font.render('KEY CONTROLS', 1, BLACK)
+        title_rect = pg.Rect(100 , 100 , 300 , 70)
+        title_rect.center = (WIDTH // 2 , 100)
+
+        text2b = options_font1_back.render('Press ESC to pause', 1, BLACK)
+        text2b_rect = text2b.get_rect(center=(WIDTH // 2, 380))
+        text2 = options_font1.render('Press ESC to pause', 1, 'green')
+        text2_rect = text2.get_rect(center=(WIDTH // 2, 380))
+
+        rect_big = pg.Rect(250 , 140 , 500 , 380)
+        pg.draw.rect(screen , GREY , rect_big , 0 , 4)
+        pg.draw.rect(screen, 'green', title_rect , 0 , 4)
+        pg.draw.rect(screen, BLACK, title_rect, 3, 4)
+
+        screen.blit(title , (title_rect.x + 35 , title_rect.y + 10))
+        screen.blit(text2b, text2b_rect)
+        screen.blit(text2, text2_rect)
+
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                pg.quit()
+                sys.exit()
+
+            if event.type == pg.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    if mouse[0] in range(back_button.rect.left, back_button.rect.right) and mouse[1] in range(back_button.rect.top, back_button.rect.bottom):
+                        click_sound.play()
+                        rebinding = None
+                        options()
+                    if mouse[0] in range(reset_button.rect.left, reset_button.rect.right) and mouse[1] in range(reset_button.rect.top, reset_button.rect.bottom):
+                        click_sound.play()
+                        with open('default_preset.json' , 'r') as f:
+                            controls = json.load(f)
+                        try:
+                            os.remove('preset.json')
+                        except:
+                            pass
+                    if mouse[0] in range(up_text.change_rect.left, up_text.change_rect.right) and mouse[1] in range(up_text.change_rect.top, up_text.change_rect.bottom):
+                        click_sound.play()
+                        rebinding = 'up'
+                    if mouse[0] in range(down_text.change_rect.left, down_text.change_rect.right) and mouse[1] in range(down_text.change_rect.top, down_text.change_rect.bottom):
+                        click_sound.play()
+                        rebinding = 'down'
+                    if mouse[0] in range(fire_text.change_rect.left, fire_text.change_rect.right) and mouse[1] in range(fire_text.change_rect.top, fire_text.change_rect.bottom):
+                        click_sound.play()
+                        rebinding = 'fire'
+                    if mouse[0] in range(action_text.change_rect.left, action_text.change_rect.right) and mouse[1] in range(action_text.change_rect.top, action_text.change_rect.bottom):
+                        click_sound.play()
+                        rebinding = 'action'
+
+            if event.type == pg.KEYDOWN and rebinding:
+                    if event.key == pg.K_ESCAPE:
+                        rebinding = None
+                    elif event.key in controls.values():
+                        rebinding = None
+                    else:
+                        controls[rebinding] = event.key
+                        rebinding = None
+
+                        with open('preset.json', 'w') as f:
+                            json.dump(controls , f)
+
+        if rebinding:
+            screen.blit(waiting_text , waiting_text_rect)
+        else:
+            for button in preset_texts:
+                button.colour = button.colour_passive
+        if rebinding == 'up':
+            up_text.colour = up_text.colour_active
+        if rebinding == 'down':
+            down_text.colour = down_text.colour_active
+        if rebinding == 'fire':
+            fire_text.colour = fire_text.colour_active
+        if rebinding == 'action':
+            action_text.colour = action_text.colour_active
+
+        preset_texts.update()
+        clock.tick(60)
+        pg.display.flip()
+
 def gameover():
     global highscore , mouse_count , high_score_notification
     game_over = True
@@ -789,20 +948,21 @@ def gameover():
                 sys.exit()
 
             if event.type == pg.MOUSEBUTTONDOWN:
-                if mouse[0] in range(restart.rect.left, restart.rect.right) and mouse[1] in range(restart.rect.top,restart.rect.bottom):
-                    for entitity in all_entities:
-                        entitity.kill()
-                    score = 0
-                    click_sound.play()
-                    high_score_notification = False
-                    play()
-                if mouse[0] in range(menu_button.rect.left, menu_button.rect.right) and mouse[1] in range(menu_button.rect.top,menu_button.rect.bottom):
-                    for entitity in all_entities:
-                        entitity.kill()
-                    menu_music.play(-1)
-                    click_sound.play()
-                    high_score_notification = False
-                    menu()
+                if event.button == 1:
+                    if mouse[0] in range(restart.rect.left, restart.rect.right) and mouse[1] in range(restart.rect.top,restart.rect.bottom):
+                        for entitity in all_entities:
+                            entitity.kill()
+                        score = 0
+                        click_sound.play()
+                        high_score_notification = False
+                        play()
+                    if mouse[0] in range(menu_button.rect.left, menu_button.rect.right) and mouse[1] in range(menu_button.rect.top,menu_button.rect.bottom):
+                        for entitity in all_entities:
+                            entitity.kill()
+                        menu_music.play(-1)
+                        click_sound.play()
+                        high_score_notification = False
+                        menu()
 
         clock.tick(60)
         pg.draw.rect(surface2 , DARK_GREY , (200 , 100 , 600 , 500))
