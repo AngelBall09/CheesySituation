@@ -13,7 +13,10 @@ icon = pg.image.load(join('Assets/cheese.png'))
 pg.display.set_icon(icon)
 floor = pg.transform.scale(pg.image.load(join('Assets/floor.jpg')), (1050 , 800))
 player_image = pg.image.load(join('Assets/cheese.png'))
-
+sound_on = pg.transform.scale(pg.image.load(join('Assets/sound_on.png')) , (60 , 50))
+sound_off = pg.transform.scale(pg.image.load(join('Assets/sound_off.png')) , (60 ,50))
+music_off = pg.transform.scale(pg.image.load(join('Assets/music_off.png')) , (50 , 50))
+music_on = pg.transform.scale(pg.image.load(join('Assets/music_on.png')) , (50 , 50))
 
 YELLOW = (230 , 230 , 30)
 BLACK = (0 , 0 , 0)
@@ -21,6 +24,7 @@ GREEN = (10 , 150 , 60)
 WHITE = (255 , 255 , 255)
 GREY = (128 , 128 , 128 , 4 )
 DARK_GREY = (70 ,70 ,70)
+MID_GREY = (100 , 100 , 100)
 LIGHT_BLUE = (12 , 175 , 170)
 
 
@@ -34,9 +38,6 @@ menu_font2_back.set_bold(True)
 pause_font = pg.font.SysFont('Impact' , 60)
 pause_text_font = pg.font.SysFont('Impact' , 30)
 pause_text = pause_font.render('Game Paused' , 1 , BLACK)
-pause_text1 = pause_text_font.render('W , S   --->   MOVE' , 1 , WHITE)
-pause_text2 = pause_text_font.render('SPACE   --->   FIRE RAT POISON' , 1 , WHITE)
-pause_text3 = pause_text_font.render('R   --->   THROW POISON TRAP' , 1 , WHITE)
 
 score_font = pg.font.SysFont('Times New Roman' , 40)
 stage_text_font = pg.font.SysFont('Times New Roman'  , 20)
@@ -68,6 +69,8 @@ player_group = pg.sprite.Group()
 explosion_entities = pg.sprite.Group()
 trap_entities = pg.sprite.Group()
 preset_texts = pg.sprite.Group()
+pause_texts = pg.sprite.Group()
+info_texts = pg.sprite.Group()
 
 explosion = pg.image.load(join('Assets/explosion.png'))
 mouse_width , mouse_height = 200 , 60
@@ -118,6 +121,11 @@ try:
         custom_preset = True
 except:
     pass
+
+sound = True
+music = True
+sound_image = sound_on
+music_image = music_on
 
 class Button():
     def __init__(self , width , height , x_pos , y_pos , text_input):
@@ -321,9 +329,9 @@ class PresetText(pg.sprite.Sprite):
         self.key_text = pg.key.name(controls[self.move]).upper()
 
         self.text = options_font1.render(f'{self.move.upper()} -->  {self.key_text}', 1, "green")
-        self.text_rect = self.text.get_rect(center=cords)
+        self.text_rect = self.text.get_rect(center=self.cords)
         self.text_back = options_font1_back.render(f'{self.move.upper()} -->  {self.key_text}', 1, BLACK)
-        self.text_back_rect = self.text_back.get_rect(center=cords)
+        self.text_back_rect = self.text_back.get_rect(center=self.cords)
 
         self.colour_active = YELLOW
         self.colour_passive = 'green'
@@ -334,6 +342,7 @@ class PresetText(pg.sprite.Sprite):
         self.text = options_font1.render(f'{self.move.upper()} -->  {self.key_text}', 1, "green")
         self.text_back = options_font1_back.render(f'{self.move.upper()} -->  {self.key_text}', 1, BLACK)
         self.text_back_rect = self.text_back.get_rect(center= self.cords)
+        self.text_rect = self.text.get_rect(center = self.cords)
 
         screen.blit(self.text_back, self.text_back_rect)
         screen.blit(self.text, self.text_rect)
@@ -342,6 +351,89 @@ class PresetText(pg.sprite.Sprite):
         self.change_rect.x += 20
         pg.draw.rect(screen, self.colour , self.change_rect, 0, 4)
         screen.blit(change_text, self.change_rect)
+
+class Text(pg.sprite.Sprite):
+    def __init__(self , text , x , y , size , font_style , colour , underline , bold , surf , groups):
+        super().__init__(groups)
+        self.text = text
+        self.x = x
+        self.y = y
+        self.cords = (x,y)
+        self.size = size
+        self.colour = colour
+        self.underline = underline
+        self.bold = bold
+        self.surf = surf
+        self.font_style = font_style
+        self.font = pg.font.SysFont(self.font_style , self.size)
+        if self.bold:
+            self.font_back = pg.font.SysFont(self.font_style , self.size)
+            self.font_back.set_bold(True)
+            self.text_surf_back = self.font_back.render(self.text, 1, BLACK)
+        self.text_surf = self.font.render(self.text , 1 , self.colour)
+        self.rect = self.text_surf.get_rect(midleft = self.cords)
+
+    def update(self):
+        if self.bold:
+            self.surf.blit(self.text_surf_back, self.rect)
+        self.surf.blit(self.text_surf , self.rect)
+        if self.underline:
+            pg.draw.line(self.surf, BLACK , (self.x - 8, self.y + self.rect.height // 2 + 5), (self.rect.width + self.x + 2, self.y + self.rect.height // 2 + 5), 5)
+            pg.draw.line(self.surf , self.colour , (self.x - 5 , self.y + self.rect.height//2 + 3) , (self.rect.width + self.x + 5 , self.y + self.rect.height//2 + 3) , 5)
+
+class PauseText(pg.sprite.Sprite):
+    def __init__(self , move , cords , groups):
+        super().__init__(groups)
+        self.move = move
+        self.cords = cords
+        self.key_text = pg.key.name(controls[self.move]).upper()
+
+        self.text = options_font1.render(f'{self.move.upper()} -->  {self.key_text}', 1, WHITE)
+        self.text_rect = self.text.get_rect(center=self.cords)
+        self.text_back = options_font1_back.render(f'{self.move.upper()} -->  {self.key_text}', 1, BLACK)
+        self.text_back_rect = self.text_back.get_rect(center=self.cords)
+
+    def update(self):
+        self.key_text = pg.key.name(controls[self.move]).upper()
+        self.text = options_font1.render(f'{self.move.upper()} -->  {self.key_text}', 1, WHITE)
+        self.text_back = options_font1_back.render(f'{self.move.upper()} -->  {self.key_text}', 1, BLACK)
+        self.text_back_rect = self.text_back.get_rect(center= self.cords)
+        self.text_rect = self.text.get_rect(center = self.cords)
+
+        surface.blit(self.text_back, self.text_back_rect)
+        surface.blit(self.text, self.text_rect)
+
+class Rectangle(pg.sprite.Sprite):
+    def __init__(self , width , height , center , colour , side , eccentry , write , text , surf , font_style , size ,text_colour , groups):
+        super().__init__(groups)
+        self.width = width
+        self.height = height
+        self.center = center
+        self.colour = colour
+        self.text_colour = text_colour
+        self.side = side
+        self.eccentry = eccentry
+        self.write = write
+        self.text = text
+        self.font_style = font_style
+        self.size = size
+        self.font = pg.font.SysFont(self.font_style , self.size)
+        self.surface = surf
+        self.rect = pg.Rect(0 , 0 , self.width , self.height)
+        self.rect.center = self.center
+
+        if self.write:
+            self.text_surf = self.font.render(self.text , 1 , self.text_colour)
+            self.text_rect = self.text_surf.get_rect(center = self.center)
+            self.rect2 = self.text_rect.inflate(20 , 10)
+
+    def update(self):
+        if self.write:
+            pg.draw.rect(self.surface , self.colour , self.rect2 , self.side , self.eccentry)
+            self.surface.blit(self.text_surf , self.text_rect)
+        else:
+            pg.draw.rect(self.surface, self.colour, self.rect, self.side, self.eccentry)
+
 
 def collisions():
     global mouse_count
@@ -440,7 +532,7 @@ def menu():
         pg.display.flip()
 
 def play():
-    global mouse_count, highscore , high_score_notification
+    global mouse_count, highscore , high_score_notification , music , sound , pause_texts
     music_delay = 0
     menu_music.stop()
     screen.blit(floor , (-20 , -20))
@@ -493,6 +585,16 @@ def play():
     stage5_text_rect.center = (WIDTH // 2 - 50, 60)
 
 
+    continue_button = Pause_Button(200, 50, 240, 580, 'CONTINUE')
+    menu_button = Pause_Button(210, 50, 730, 580, 'MAIN MENU')
+
+    pause_rect = Rectangle(800 , 600 , (WIDTH//2 , HEIGHT//2) , DARK_GREY , 0 , 0 , False , '' , surface , '' , 0 , BLACK , pause_texts)
+    pause_text = Rectangle(400 , 80, (WIDTH // 2, 110), 'dark grey', 0, 4 , True, 'Game Paused', surface, 'Impact', 60 , BLACK, pause_texts)
+    pause_text1 = PauseText('up' , (WIDTH//2 , 250) , pause_texts)
+    pause_text2 = PauseText('down' , (WIDTH//2 , 300) , pause_texts)
+    pause_text3 = PauseText('fire' , (WIDTH//2 , 350) , pause_texts)
+    pause_text4 = PauseText('action' , (WIDTH//2 ,400) , pause_texts)
+
     while True:
         mouse = pg.mouse.get_pos()
         music_delay += 1
@@ -532,23 +634,13 @@ def play():
 
         if pause:
             pg.draw.rect(surface, GREY , (0, 0, WIDTH, HEIGHT))
-            pg.draw.rect(surface , DARK_GREY , (100, 50 , 800 , 600))
-            pg.draw.rect(surface , 'dark grey' , (280 , 65 , 400 , 80) , 0 , 4)
-            surface.blit(pause_text , (320 , 65))
-
-            continue_button = Pause_Button(200 , 50 , 240 , 580 , 'CONTINUE')
+            pause_texts.update()
             continue_button.changecolour(mouse)
             continue_button.update('dark grey')
-
-            menu_button = Pause_Button(210 , 50 , 730 , 580 , 'MAIN MENU')
             menu_button.changecolour(mouse)
             menu_button.update('dark grey')
 
-            surface.blit(pause_text1 , (380 , 170))
-            surface.blit(pause_text2 , (320 , 230))
-            surface.blit(pause_text3, (320, 290))
             screen.blit(surface, (0, 0))
-
             pg.display.flip()
 
         for event in pg.event.get():
@@ -579,7 +671,8 @@ def play():
                     if mouse[0] in range(continue_button.rect.left , continue_button.rect.right) and mouse[1] in range(continue_button.rect.top , continue_button.rect.bottom) and pause:
                         pause = False
                         click_sound.play()
-                        pg.mixer.music.unpause()
+                        if music:
+                            pg.mixer.music.unpause()
                     if mouse[0] in range(menu_button.rect.left , menu_button.rect.right) and mouse[1] in range(menu_button.rect.top , menu_button.rect.bottom) and pause:
                         for entity in all_entities:
                             entity.kill()
@@ -657,6 +750,7 @@ def play():
             pg.display.flip()
 
 def options():
+    global sound_image , music_image , sound, music, sound_off, sound_on, music_on, music_off
     screen.blit(floor , (-20 , -20))
 
     while True:
@@ -667,12 +761,20 @@ def options():
         info_button = Button(150, 60, WIDTH // 2, 290, 'INFO')
         info_button.changecolour(mouse)
         info_button.update(BLACK)
-        controls_button = Button(220, 60, WIDTH // 2, 360, 'PRESETS')
+        controls_button = Button(220, 60, WIDTH // 2, 360, 'CONTROLS')
         controls_button.changecolour(mouse)
         controls_button.update(BLACK)
         back_button = Button(150, 60, WIDTH // 2, 430, 'BACK')
         back_button.changecolour(mouse)
         back_button.update(BLACK)
+
+        sound_rect = pg.Rect(450 , 550 , 60 , 50)
+        pg.draw.rect(screen , WHITE , sound_rect , 0 , 5)
+        screen.blit(sound_image , (450 , 550))
+
+        music_rect = pg.Rect(520 , 550 , 60 , 50)
+        pg.draw.rect(screen , WHITE , music_rect , 0 , 5)
+        screen.blit(music_image , (525 , 552))
 
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -685,21 +787,76 @@ def options():
                         info()
                     if mouse[0] in range(controls_button.rect.left, controls_button.rect.right) and mouse[1] in range(controls_button.rect.top, controls_button.rect.bottom):
                         click_sound.play()
-                        presets()
+                        keybinds()
                     if mouse[0] in range(back_button.rect.left, back_button.rect.right) and mouse[1] in range(back_button.rect.top, back_button.rect.bottom):
                         click_sound.play()
                         menu()
+                    if mouse[0] in range(sound_rect.left, sound_rect.right) and mouse[1] in range(sound_rect.top, sound_rect.bottom):
+                        click_sound.play()
+                        if sound:
+                            sound = False
+                        else:
+                            sound = True
+                    if mouse[0] in range(music_rect.left, music_rect.right) and mouse[1] in range(music_rect.top, music_rect.bottom):
+                        click_sound.play()
+                        if music:
+                            music = False
+                        else:
+                            music = True
+
+        if music:
+            music_image = music_on
+            menu_music.set_volume(0.4)
+            pg.mixer.music.set_volume(1)
+        else:
+            music_image = music_off
+            menu_music.set_volume(0)
+            pg.mixer.music.set_volume(0)
+        if sound:
+            sound_image = sound_on
+            mouse_spawn.set_volume(1)
+            mouse_death.set_volume(0.7)
+            laser_sound.set_volume(0.3)
+            trap_sound.set_volume(1)
+            highscore_sound.set_volume(1)
+        else:
+            sound_image = sound_off
+            mouse_spawn.set_volume(0)
+            mouse_death.set_volume(0)
+            laser_sound.set_volume(0)
+            trap_sound.set_volume(0)
+            highscore_sound.set_volume(0)
 
         clock.tick(60)
         pg.display.flip()
 
 def info():
     screen.blit(floor , (-20 , -20))
+    back_button = Button(150, 60, WIDTH // 2, 650, 'BACK')
+
+    stage1 = Text('STAGE 1 :' , 20 , 50 , 35 , 'Impact' , YELLOW , True , True , screen , info_texts)
+    text1_1 = Text('- Mice Numbers :  Very Low' , 30 , 100 , 25 , 'Impact' , WHITE , False , True , screen , info_texts)
+    text1_2 = Text('- Mice Speed :  Very Slow' , 350 , 100 , 25 , 'Impact' , WHITE , False , True ,screen , info_texts)
+
+    stage2 = Text('STAGE 2 :' , 20 , 150 , 35 , 'Impact' , YELLOW , True ,True , screen , info_texts)
+    text2_1 = Text('- Mice Numbers :  Low', 30, 200, 25, 'Impact', WHITE, False, True ,screen , info_texts)
+    text2_2 = Text('- Mice Speed :  Slow', 350, 200, 25, 'Impact', WHITE, False, True ,screen , info_texts)
+
+    stage3 = Text('STAGE 3 :', 20, 250, 35, 'Impact', YELLOW, True, True ,screen , info_texts)
+    text3_1 = Text('- Mice Numbers :  Normal', 30, 300, 25, 'Impact', WHITE, False, True ,screen , info_texts)
+    text3_2 = Text('- Mice Speed :  Medium', 350, 300, 25, 'Impact', WHITE, False, True ,screen , info_texts)
+
+    stage4 = Text('STAGE 4 :', 20, 350, 35, 'Impact', YELLOW, True, True ,screen , info_texts)
+    text4_1 = Text('- Mice Numbers :  High', 30, 400, 25, 'Impact', WHITE, False, True ,screen , info_texts)
+    text4_2 = Text('- Mice Speed :  Fast', 350, 400, 25, 'Impact', WHITE, False, True ,screen , info_texts)
+
+    stage5 = Text('STAGE 5 :', 20, 450, 35, 'Impact', YELLOW, True, True ,screen , info_texts)
+    text5_1 = Text('- Mice Numbers :  High', 30, 500, 25, 'Impact', WHITE, False, True ,screen , info_texts)
+    text5_2 = Text('- Mice Speed :  Very Fast', 350, 500, 25, 'Impact', WHITE, False, True ,screen , info_texts)
 
     while True:
         clock = pg.time.Clock()
         mouse = pg.mouse.get_pos()
-        back_button = Button(150, 60, WIDTH // 2, 650, 'BACK')
         back_button.changecolour(mouse)
         back_button.update(BLACK)
 
@@ -715,123 +872,10 @@ def info():
                         options()
 
         clock.tick(60)
-
-
-
-        stage1b = gameover_text_font_back.render('Stage 1 (0-200):', 1, BLACK)
-        stage1b_rect = stage1b.get_rect(center=(135, 300))
-        screen.blit(stage1b, stage1b_rect)
-        pg.draw.line(screen, 'green', (10, 325), (260, 325), 5)
-        stage1_text1b = options_font2_back.render('- Player moves slow', 1, BLACK)
-        screen.blit(stage1_text1b, (10, 330))
-        stage1_text2b = options_font2_back.render('- Slow reload', 1, BLACK)
-        screen.blit(stage1_text2b, (10, 360))
-        stage1_text3b = options_font2_back.render('- No poison traps(be careful)', 1, BLACK)
-        screen.blit(stage1_text3b, (10, 390))
-        stage1_text4b = options_font2_back.render('- Slow & Few enemies', 1, BLACK)
-        screen.blit(stage1_text4b, (10, 420))
-
-        stage1 = gameover_text_font.render('Stage 1 (0-200):' , 1 , YELLOW)
-        stage1_rect = stage1.get_rect(center = (135 , 300))
-        screen.blit(stage1 , stage1_rect)
-        pg.draw.line(screen , YELLOW , (10 , 325) , (260 , 325) , 5)
-        stage1_text1 = options_font2.render('- Player moves slow' , 1 , YELLOW)
-        screen.blit(stage1_text1 , (10 , 330))
-        stage1_text2 = options_font2.render('- Slow reload', 1, YELLOW)
-        screen.blit(stage1_text2 , (10 , 360))
-        stage1_text3 = options_font2.render('- No poison traps(be careful)', 1, YELLOW)
-        screen.blit(stage1_text3, (10, 390))
-        stage1_text4 = options_font2.render('- Slow & Few enemies', 1, YELLOW)
-        screen.blit(stage1_text4, (10, 420))
-
-        stage2b = gameover_text_font_back.render('Stage 2 (200-600):', 1, BLACK)
-        stage2b_rect = stage2b.get_rect(center=(505, 300))
-        screen.blit(stage2b, stage2b_rect)
-        pg.draw.line(screen, BLACK, (360, 325), (660, 325), 5)
-        stage2_text1b = options_font2_back.render('- Faster laser & trap reload', 1, BLACK)
-        screen.blit(stage2_text1b, (360, 330))
-        stage2_text2b = options_font2_back.render('- More & Faster enemies', 1, BLACK)
-        screen.blit(stage2_text2b, (360, 360))
-        stage2_text3b = options_font2_back.render('- Unlocks poison traps(1)', 1, BLACK)
-        screen.blit(stage2_text3b, (360, 390))
-
-        stage2 = gameover_text_font.render('Stage 2 (200-600):' , 1 , YELLOW)
-        stage2_rect = stage2.get_rect(center = (505 , 300))
-        screen.blit(stage2, stage2_rect)
-        pg.draw.line(screen , YELLOW , (360 , 325) , (660 , 325) , 5)
-        stage2_text1 = options_font2.render('- Faster laser & trap reload', 1, YELLOW)
-        screen.blit(stage2_text1, (360, 330))
-        stage2_text2 = options_font2.render('- More & Faster enemies', 1, YELLOW)
-        screen.blit(stage2_text2, (360, 360))
-        stage2_text3 = options_font2.render('- Unlocks poison traps(1)', 1, YELLOW)
-        screen.blit(stage2_text3, (360, 390))
-
-        stage3b = gameover_text_font_back.render('Stage 3 (600-1300):', 1, BLACK)
-        stage3b_rect = stage3b.get_rect(center=(840, 300))
-        screen.blit(stage3b, stage3b_rect)
-        pg.draw.line(screen, BLACK, (690, 325), (998, 325), 5)
-        stage3_text1b = options_font2_back.render('- Player moves faster', 1, BLACK)
-        screen.blit(stage3_text1b, (690, 330))
-        stage3_text2b = options_font2_back.render('- Even faster reload', 1, BLACK)
-        screen.blit(stage3_text2b, (690, 360))
-        stage3_text3b = options_font2_back.render('- +1 Poison trap(2)', 1, BLACK)
-        screen.blit(stage3_text3b, (690, 390))
-        stage3_text4b = options_font2_back.render('- Even more & faster', 1, BLACK)
-        screen.blit(stage3_text4b, (690, 420))
-        stage3_text5b = options_font2_back.render('enemies', 1, BLACK)
-        screen.blit(stage3_text5b, (690, 450))
-
-        stage3 = gameover_text_font.render('Stage 3 (600-1300):', 1, YELLOW)
-        stage3_rect = stage3.get_rect(center=(840, 300))
-        screen.blit(stage3 , stage3_rect)
-        pg.draw.line(screen, YELLOW, (690 , 325), (998, 325), 5)
-        stage3_text1 = options_font2.render('- Player moves faster', 1, YELLOW)
-        screen.blit(stage3_text1, (690, 330))
-        stage3_text2 = options_font2.render('- Even faster reload', 1, YELLOW)
-        screen.blit(stage3_text2, (690, 360))
-        stage3_text3 = options_font2.render('- +1 Poison trap(2)', 1, YELLOW)
-        screen.blit(stage3_text3, (690, 390))
-        stage3_text4 = options_font2.render('- Even more & faster', 1, YELLOW)
-        screen.blit(stage3_text4, (690, 420))
-        stage3_text5 = options_font2.render('enemies', 1, YELLOW)
-        screen.blit(stage3_text5, (690, 450))
-
-        stage4b = gameover_text_font_back.render('Stage 4 (1300-2000):', 1, BLACK)
-        stage4b_rect = stage4b.get_rect(center=(175, 530))
-        screen.blit(stage4b, stage4b_rect)
-        pg.draw.line(screen, BLACK, (10, 555), (345, 555), 5)
-        stage4_text1b = options_font2_back.render('- Even MORE & FASTER enemies', 1, BLACK)
-        screen.blit(stage4_text1b, (10, 560))
-        stage4_text2b = options_font2_back.render('- +2 Poison traps (4)', 1, BLACK)
-        screen.blit(stage4_text2b, (10, 590))
-
-        stage4 = gameover_text_font.render('Stage 4 (1300-2000):', 1, YELLOW)
-        stage4_rect = stage4.get_rect(center=(175 , 530))
-        screen.blit(stage4, stage4_rect)
-        pg.draw.line(screen, YELLOW, (10 , 555) , (345 , 555), 5)
-        stage4_text1 = options_font2.render('- Even MORE & FASTER enemies', 1, YELLOW)
-        screen.blit(stage4_text1, (10 , 560))
-        stage4_text2 = options_font2.render('- +2 Poison traps (4)', 1, YELLOW)
-        screen.blit(stage4_text2, (10, 590))
-
-        stage5b = gameover_text_font_back.render('Stage 5 (2000 +):', 1, BLACK)
-        stage5b_rect = stage5b.get_rect(center=(830, 530))
-        screen.blit(stage5b, stage5b_rect)
-        pg.draw.line(screen, BLACK, (695, 555), (970, 555), 5)
-        stage5_text1b = options_font2_back.render('- CRAZY FAST enemies', 1, BLACK)
-        screen.blit(stage5_text1b, (700, 560))
-
-        stage5 = gameover_text_font.render('Stage 5 (2000 +):', 1, YELLOW)
-        stage5_rect = stage5.get_rect(center=(830 , 530))
-        screen.blit(stage5, stage5_rect)
-        pg.draw.line(screen, YELLOW, (695, 555), (970, 555), 5)
-        stage5_text1 = options_font2.render('- CRAZY FAST enemies', 1, YELLOW)
-        screen.blit(stage5_text1, (700 , 560))
-
+        info_texts.update()
         pg.display.flip()
 
-
-def presets():
+def keybinds():
     global rebinding , controls
     preset_texts.empty()
     screen.blit(floor, (-20, -20))
@@ -864,7 +908,8 @@ def presets():
         text2_rect = text2.get_rect(center=(WIDTH // 2, 380))
 
         rect_big = pg.Rect(250 , 140 , 500 , 380)
-        pg.draw.rect(screen , GREY , rect_big , 0 , 4)
+        pg.draw.rect(screen , MID_GREY , rect_big , 0 , 4)
+        pg.draw.rect(screen, BLACK, rect_big, 4, 4)
         pg.draw.rect(screen, 'green', title_rect , 0 , 4)
         pg.draw.rect(screen, BLACK, title_rect, 3, 4)
 
