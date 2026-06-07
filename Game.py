@@ -221,6 +221,7 @@ class Player(pg.sprite.Sprite):
         super().__init__(groups)
         self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(image), (100, 85)), 10)
         self.rect = self.image.get_rect(center=(pos))
+        self.mask = pg.mask.from_surface(self.image)
         self.speed = 5
         self.timer = 0
         self.can_shoot = can_shoot
@@ -277,22 +278,35 @@ class Mouse(pg.sprite.Sprite):
         self.height = height
         self.image = pg.transform.scale(pg.image.load(join(image)) , (self.width , self.height))
         self.rect = self.image.get_rect()
+        self.mask = pg.mask.from_surface(self.image)
         self.rect.x = self.x
         self.rect.y = self.y
         self.speed = speed
-
+        self.rotated = False
+        self.cords = (self.x , self.y)
 
     def update(self):
         for player in player_group:
-            if self.rect.left > 50:
+            if self.rect.left > 45:
+                self.cords = self.rect.midleft
                 self.rect.x -= self.speed
 
             else:
                 if self.y < player.rect.y:
                     self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/mousetop.png')), (150 , 60)), 90)
+                    if self.rotated == False:
+                        self.rect = self.image.get_rect(center = self.cords)
+                        self.rect.centerx = 75
+                        self.mask = pg.mask.from_surface(self.image)
+                        self.rotated = True
                     self.rect.y += 2
                 else:
                     self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/mousetop.png')), (150, 60)), -90)
+                    if self.rotated == False:
+                        self.rotated = True
+                        self.rect = self.image.get_rect(center = self.cords)
+                        self.rect.centerx = 75
+                        self.mask = pg.mask.from_surface(self.image)
                     self.rect.y -= 2
         if self.rect.bottom < 0 or self.rect.top > HEIGHT:
             self.kill()
@@ -438,11 +452,13 @@ class Rectangle(pg.sprite.Sprite):
 def collisions():
     global mouse_count
     for player in player_group:
-        pl_collide = pg.sprite.spritecollide(player , mouse_entities , True)
+        pl_collide = pg.sprite.spritecollide(player, mouse_entities , False)
         if pl_collide:
-            player_death.play(1)
-            game_over = True
-            gameover()
+            pl_collide_mask = pg.sprite.spritecollide(player , mouse_entities , False , pg.sprite.collide_mask)
+            if pl_collide_mask:
+                player_death.play(1)
+                game_over = True
+                gameover()
 
 
     for laser in laser_entities:
@@ -740,6 +756,9 @@ def play():
             collisions()
             player.fire_timer()
             screen.blit(score_text, (0, 0))
+            # for mouse in mouse_entities:
+            #     pg.draw.rect(screen , 'green' , mouse.rect)
+            # pg.draw.rect(screen , 'blue' , player.rect)
             if highscore_num < 50 and high_score:
                 screen.blit(highscore_text, (300, 100))
             else:
