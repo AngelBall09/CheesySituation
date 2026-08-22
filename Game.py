@@ -9,10 +9,10 @@ screen = pg.display.set_mode((WIDTH , HEIGHT))
 surface = pg.Surface((WIDTH , HEIGHT), pg.SRCALPHA)
 surface2 = pg.Surface((WIDTH , HEIGHT), pg.SRCALPHA)
 pg.display.set_caption('Cheesy Situation')
-icon = pg.image.load(join('Assets/cheese.png'))
+icon = pg.image.load(join('Assets/cheeses/cheese.png'))
 pg.display.set_icon(icon)
 floor = pg.transform.scale(pg.image.load(join('Assets/floor.jpg')), (1050 , 800))
-player_image = pg.image.load(join('Assets/cheese.png'))
+player_image = pg.image.load(join('Assets/cheeses/cheese.png'))
 sound_on = pg.transform.scale(pg.image.load(join('Assets/sound_on.png')) , (60 , 50))
 sound_off = pg.transform.scale(pg.image.load(join('Assets/sound_off.png')) , (60 ,50))
 music_off = pg.transform.scale(pg.image.load(join('Assets/music_off.png')) , (50 , 50))
@@ -63,20 +63,29 @@ pg.time.set_timer(mouse_event3 , 1000)
 pg.time.set_timer(mouse_event4 , 800)
 
 laser_entities = pg.sprite.Group()
+normal_bullets = pg.sprite.Group()
+shotgun_shells = pg.sprite.Group()
+sniper_bullets = pg.sprite.Group()
+missile_entities = pg.sprite.Group()
+missile_explosions = pg.sprite.Group()
+air_entities_up = pg.sprite.Group()
+air_entities_down = pg.sprite.Group()
 mouse_entities = pg.sprite.Group()
 all_entities = pg.sprite.Group()
 player_group = pg.sprite.Group()
 explosion_entities = pg.sprite.Group()
 trap_entities = pg.sprite.Group()
+
+
 preset_texts = pg.sprite.Group()
 pause_texts = pg.sprite.Group()
 info_texts = pg.sprite.Group()
 
-explosion = pg.image.load(join('Assets/explosion.png'))
+explosion = pg.image.load(join('Assets/bullets_effects/explosion.png'))
 mouse_width , mouse_height = 200 , 60
-mouse_image = 'Assets/mouse.png'
+mouse_image = 'Assets/mice/mouse.png'
 
-mouse_count = 0
+mouse_kills = 0
 game_over = False
 high_score_notification = False
 if os.path.exists('highscore.txt'):
@@ -86,18 +95,25 @@ else:
     highscore = 0
 
 
-game_music = pg.mixer.music.load(join('Assets/Game Music.mp3'))
-menu_music = pg.mixer.Sound(join('Assets/Menu Music.mp3'))
+game_music = pg.mixer.music.load(join('Assets/sound_effects/Game Music.mp3'))
+menu_music = pg.mixer.Sound(join('Assets/sound_effects/Menu Music.mp3'))
 menu_music.set_volume(0.4)
-mouse_spawn = pg.mixer.Sound(join('Assets/mouse_squeak.mp3'))
-mouse_death = pg.mixer.Sound(join('Assets/splash.mp3'))
+mouse_spawn = pg.mixer.Sound(join('Assets/sound_effects/mouse_squeak.mp3'))
+mouse_death = pg.mixer.Sound(join('Assets/sound_effects/splash.mp3'))
 mouse_death.set_volume(0.7)
-laser_sound = pg.mixer.Sound(join('Assets/spray.mp3'))
+laser_sound = pg.mixer.Sound(join('Assets/sound_effects/spray.mp3'))
 laser_sound.set_volume(0.3)
-trap_sound = pg.mixer.Sound(join('Assets/poison.mp3'))
-player_death = pg.mixer.Sound(join('Assets/munch.mp3'))
-highscore_sound = pg.mixer.Sound(join('Assets/highscore.mp3'))
-click_sound = pg.mixer.Sound(join('Assets/click.mp3'))
+bullet_sound = pg.mixer.Sound(join('Assets/sound_effects/bullet.mp3'))
+bullet_sound.set_volume(0.3)
+shotgun_sound = pg.mixer.Sound(join('Assets/sound_effects/shotgun.mp3'))
+shotgun_sound.set_volume(0.7)
+rat_slayer_sound = pg.mixer.Sound(join('Assets/sound_effects/rat_slayer.mp3'))
+ratzooka_sound1 = pg.mixer.Sound(join('Assets/sound_effects/ratzooka1.mp3'))
+ratzooka_sound2 = pg.mixer.Sound(join('Assets/sound_effects/ratzooka2.mp3'))
+trap_sound = pg.mixer.Sound(join('Assets/sound_effects/poison.mp3'))
+player_death = pg.mixer.Sound(join('Assets/sound_effects/munch.mp3'))
+highscore_sound = pg.mixer.Sound(join('Assets/sound_effects/highscore.mp3'))
+click_sound = pg.mixer.Sound(join('Assets/sound_effects/click.mp3'))
 menu_music.play(-1)
 
 change_text = options_font1.render('SWITCH', 1, BLACK)
@@ -110,7 +126,10 @@ controls = {
     "down" : pg.K_s,
     "fire" : pg.K_SPACE,
     "action" : pg.K_r,
+    "reload" : pg.K_f
 }
+
+inventory = {}
 
 with open('default_preset.json' , 'w') as f:
     json.dump(controls , f)
@@ -122,10 +141,18 @@ try:
 except:
     pass
 
+try:
+    with open('inventory.json' , 'r') as f:
+        inventory = json.load(f)
+except:
+    pass
+
 sound = True
 music = True
 sound_image = sound_on
 music_image = music_on
+
+last_press = {}
 
 class Button():
     def __init__(self , width , height , x_pos , y_pos , text_input):
@@ -198,38 +225,222 @@ class Gameover_Button():
             self.text = pause_button_font.render(self.text_input, 1, BLACK)
 
 class Gun(pg.sprite.Sprite):
-    def __init__(self , x  ,y , image , groups):
+    def __init__(self , x  ,y , gun , speed , can_shoot , groups):
         super().__init__(groups)
+        self.gun = gun
+        self.cooldown = False
+        if self.gun == 'rat_poison':
+            self.image = pg.transform.scale(pg.image.load('Assets/guns/rat_poison_right.png') , (35 , 85))
+            self.reload_sound = pg.mixer.Sound(join('Assets/sound_effects/rat_poison_reload2.mp3'))
+            self.magazine = 15
+            self.fire_cooldown = 30
+            self.reload_time = 60
+            self.damage = 25
+        elif self.gun == 'rat_killers':
+            self.image = pg.transform.scale(pg.image.load('Assets/guns/rat_killers.png') , (100 , 75))
+            self.reload_sound = pg.mixer.Sound(join('Assets/sound_effects/rat_killers_reload.mp3'))
+            self.magazine = 12
+            self.fire_cooldown = 20
+            self.reload_time = 120
+            self.damage = 40
+        elif self.gun == 'rat_buster':
+            self.image = pg.transform.scale(pg.image.load('Assets/guns/shotgun_right.png') , (150 , 60))
+            self.reload_sound = pg.mixer.Sound(join('Assets/sound_effects/shotgun_reload.mp3'))
+            self.load_sound = pg.mixer.Sound(join('Assets/sound_effects/shotgun_load.mp3'))
+            self.magazine = 5
+            self.fire_cooldown = 45
+            self.reload_time = 180
+            self.damage = 80
+        elif self.gun == 'ratata':
+            self.image = pg.transform.scale(pg.image.load('Assets/guns/ratata_right.png') , (175 , 60))
+            self.reload_sound = pg.mixer.Sound(join('Assets/sound_effects/ratata_reload.mp3'))
+            self.magazine = 30
+            self.fire_cooldown = 10
+            self.reload_time = 150
+            self.damage = 45
+        elif self.gun == 'rat_slayer':
+            self.image = pg.transform.scale(pg.image.load('Assets/guns/bayonet_right.png') , (190 , 70))
+            self.reload_sound = pg.mixer.Sound(join('Assets/sound_effects/rat_slayer_reload.mp3'))
+            self.load_sound = pg.mixer.Sound(join('Assets/sound_effects/rat_slayer_load.mp3'))
+            self.magazine = 6
+            self.fire_cooldown = 120
+            self.reload_time = 120
+            self.melee = False
+            self.damage = 160
+        elif self.gun == 'ratzooka':
+            self.image = pg.transform.scale(pg.image.load('Assets/guns/ratzooka_right.png') , (200 , 65))
+            self.magazine = 1
+            self.fire_cooldown = 25
+            self.reload_time = 100
+            self.damage = 200
+
         self.x = x
         self.y = y
-        self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(image) , (100 , 85)) , 10)
         self.rect = self.image.get_rect(center = (x , y))
-        self.speed = 5
+        self.speed = speed
+        self.can_shoot = can_shoot
+        self.timer = 0
 
     def update(self):
+        if self.gun == 'ratzooka':
+            if self.can_shoot:
+                self.image = pg.transform.scale(pg.image.load('Assets/guns/ratzooka_right.png') , (200 , 65))
+            else:
+                self. image = pg.transform.scale(pg.image.load('Assets/guns/ratzooka_empty.png'), (180, 65))
         keys = pg.key.get_pressed()
         if keys[controls['up']] and self.rect.top > 0:
             self.rect.y -= self.speed
         if keys[controls['down']] and self.rect.bottom < HEIGHT:
             self.rect.y += self.speed
 
+    def fire_timer(self):
+        if self.cooldown:
+            self.fire_cooldown -= 1
+            if self.gun == 'rat_buster' and self.fire_cooldown == 44:
+                self.load_sound.play()
+            elif self.gun == 'rat_slayer' and self.fire_cooldown == 119:
+                self.load_sound.play()
+        if self.magazine <= 0:
+            self.can_shoot = False
+
+        if self.gun == 'rat_killers':
+            if self.fire_cooldown <= 0:
+                self.fire_cooldown = 20
+                self.cooldown = False
+            if self.can_shoot == False:
+                self.timer += 1
+                if self.timer == 1:
+                    self.reload_sound.play()
+                if self.timer > self.reload_time:
+                    self.can_shoot = True
+                    self.magazine = 12
+                    self.timer = 0
+
+        elif self.gun == 'rat_poison':
+            if self.fire_cooldown <= 0:
+                self.fire_cooldown = 30
+                self.cooldown = False
+            if self.can_shoot == False:
+                self.image = pg.transform.scale(pg.image.load('Assets/guns/rat_poison_right_empty.png'), (40 , 20))
+                self.timer += 1
+                if self.timer == 1:
+                    self.reload_sound.play()
+                if self.timer > self.reload_time:
+                    self.can_shoot = True
+                    self.magazine = 15
+                    self.timer = 0
+            else:
+                self.image = pg.transform.scale(pg.image.load('Assets/guns/rat_poison_right.png'), (35, 85))
+
+        elif self.gun == 'rat_buster':
+            if self.fire_cooldown <= 0:
+                self.fire_cooldown = 45
+                self.cooldown = False
+            if self.can_shoot == False:
+                self.timer += 1
+                if self.timer == 1:
+                    self.reload_sound.play()
+                if self.timer > self.reload_time:
+                    self.can_shoot = True
+                    self.magazine = 5
+                    self.timer = 0
+
+        elif self.gun == 'ratata':
+            if self.fire_cooldown <= 0:
+                self.cooldown = False
+                self.fire_cooldown = 10
+            if self.can_shoot == False:
+                self.timer += 1
+                if self.timer == 1:
+                    self.reload_sound.play()
+                if self.timer > self.reload_time:
+                    self.can_shoot = True
+                    self.magazine = 30
+                    self.timer = 0
+
+        elif self.gun == 'rat_slayer':
+            if self.fire_cooldown <= 0:
+                self.fire_cooldown = 120
+                self.cooldown = False
+            if self.can_shoot == False:
+                self.timer += 1
+                if self.timer == 1:
+                    self.reload_sound.play()
+                if self.timer > self.reload_time:
+                    self.can_shoot = True
+                    self.magazine = 6
+                    self.timer = 0
+
+        elif self.gun == 'ratzooka':
+            if self.fire_cooldown <= 0:
+                self.fire_cooldown = 25
+                self.cooldown = False
+            if self.can_shoot == False:
+                self.timer += 1
+                if self.timer > self.reload_time:
+                    self.can_shoot = True
+                    self.magazine = 1
+                    self.timer = 0
+
+    def rotate(self , direction , playery):
+        if self.gun == 'rat_slayer':
+            if direction == 'up':
+                self.image = pg.transform.rotate(pg.transform.scale(pg.image.load('Assets/guns/bayonet_right.png') , (190 , 70)) , 90)
+                self.rect.y  -= 75
+            elif direction == 'down':
+                self.image = pg.transform.rotate(pg.transform.scale(pg.image.load('Assets/guns/bayonet_right.png') , (190 , 70)) , -90)
+                self.rect.y -= 40
+            elif direction == 'right':
+                self.image = pg.transform.scale(pg.image.load('Assets/guns/bayonet_right.png') , (190 , 70))
+                self.rect.centery = playery
+
     def draw(self):
         screen.blit(self.image , self.rect)
 
 class Player(pg.sprite.Sprite):
-    def __init__(self, pos , image, can_shoot, bomb , groups):
+    def __init__(self, pos , cheese, bomb , groups):
         super().__init__(groups)
-        self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(image), (100, 85)), 10)
+        self.cheese = cheese
+        if self.cheese == 'gruyere':
+            self.image = pg.transform.rotate(pg.transform.scale(pg.image.load('Assets/cheeses/cheese.png'), (100, 85)), 10)
+            self.speed = 5
+        elif self.cheese == 'feta':
+            self.image = pg.transform.scale(pg.image.load('Assets/cheeses/feta_barrel.png'), (120, 120))
+            self.speed = 3
+        elif self.cheese == 'blue_cheese':
+            self.image = pg.transform.rotate(pg.transform.scale(pg.image.load('Assets/cheeses/blue_cheese.png'), (100, 85)), 15)
+            self.speed = 5
+        elif self.cheese == 'cream_cheese':
+            self.image = pg.transform.scale(pg.image.load('Assets/cheeses/cream_cheese.png'), (80, 55))
+            self.speed = 6
+        elif self.cheese == 'cheddar':
+            self.image = pg.transform.scale(pg.image.load('Assets/cheeses/cheddar_cheese.png'), (100, 75))
+            self.speed = 3
+        elif self.cheese == 'parmesan':
+            self.image = pg.transform.scale(pg.image.load('Assets/cheeses/parmesan.png'), (120, 90))
+            self.speed = 4
+        elif self.cheese == 'smoked_cheese':
+            self.image = pg.transform.scale(pg.image.load('Assets/cheeses/smoked_cheese1.png'), (100, 85))
+            self.speed = 5
+        elif self.cheese == 'saganaki':
+            self.image = pg.transform.scale(pg.image.load('Assets/cheeses/saganaki.png'), (100, 65))
+            self.speed = 5
+        elif self.cheese == 'anthotyro':
+            self.image = pg.transform.scale(pg.image.load('Assets/cheeses/anthotyro.png'), (100, 115))
+            self.speed = 5
         self.rect = self.image.get_rect(center=(pos))
         self.mask = pg.mask.from_surface(self.image)
-        self.speed = 5
-        self.timer = 0
-        self.can_shoot = can_shoot
         self.bomb = bomb
         self.bomb_timer = 0
-        self.total_time_laser = 60
-        self.total_time_trap = 240
         self.trap_limit = 1
+        self.total_time_trap = 240
+
+    def place_timer(self):
+        if self.bomb == False:
+            self.bomb_timer += 1
+            if self.bomb_timer > self.total_time_trap:
+                self.bomb = True
+                self.bomb_timer = 0
 
     def update(self):
         keys = pg.key.get_pressed()
@@ -241,25 +452,12 @@ class Player(pg.sprite.Sprite):
     def draw(self):
         screen.blit(self.image, self.rect)
 
-    def fire_timer(self):
-        if self.can_shoot == False:
-            self.timer += 1
-            if self.timer > self.total_time_laser:
-                self.can_shoot = True
-                self.timer = 0
-
-        if self.bomb == False:
-            self.bomb_timer += 1
-            if self.bomb_timer > self.total_time_trap:
-                self.bomb = True
-                self.bomb_timer = 0
-
 class Laser(pg.sprite.Sprite):
     def __init__(self , pos , groups):
         super().__init__(groups)
-        self.image = pg.image.load(join('Assets/laser.png'))
+        self.image = pg.image.load(join('Assets/bullets_effects/laser.png'))
+        self.speed = 12
         self.rect = self.image.get_rect(midleft = (pos))
-        self.speed = 14
 
     def update(self):
         self.rect.centerx += self.speed
@@ -269,21 +467,172 @@ class Laser(pg.sprite.Sprite):
     def draw(self):
         screen.blit(self.image , self.rect)
 
+class NormalBullet(pg.sprite.Sprite):
+    def __init__(self , pos , groups):
+        super().__init__(groups)
+        self.image = pg.transform.scale(pg.image.load(join('Assets/bullets_effects/bullet.png')) , (20 , 10))
+        self.speed = 16
+        self.rect = self.image.get_rect(midleft = (pos))
+
+    def update(self):
+        self.rect.centerx += self.speed
+        if self.rect.left > WIDTH:
+            self.kill()
+
+    def draw(self):
+        screen.blit(self.image , self.rect)
+
+class ShotgunBulletMid(pg.sprite.Sprite):
+    def __init__(self , pos , groups):
+        super().__init__(groups)
+        self.timer = 0
+        self.image = pg.transform.scale(pg.image.load(join('Assets/bullets_effects/shotgun_bullet.png')) , (25 , 10))
+        self.speed = 14
+        self.rect = self.image.get_rect(midleft = (pos))
+
+    def update(self):
+        self.rect.centerx += self.speed
+        self.timer += 1
+        if self.rect.left > WIDTH or self.timer > 10:
+            self.kill()
+
+    def draw(self):
+        screen.blit(self.image , self.rect)
+
+class ShotgunBulletTop(pg.sprite.Sprite):
+    def __init__(self , pos , groups):
+        super().__init__(groups)
+        self.timer = 0
+        self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/bullets_effects/shotgun_bullet.png')) , (25 , 10)) , 25)
+        self.speed = 14
+        self.rect = self.image.get_rect(midbottom = pos)
+
+    def update(self):
+        self.rect.centerx += self.speed
+        self.rect.centery -= self.speed / 2
+        self.timer += 1
+        if self.rect.left > WIDTH or self.rect.bottom < 0 or self.timer > 10:
+            self.kill()
+
+    def draw(self):
+        screen.blit(self.image , self.rect)
+
+class ShotgunBulletBottom(pg.sprite.Sprite):
+    def __init__(self , pos , groups):
+        super().__init__(groups)
+        self.timer = 0
+        self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/bullets_effects/shotgun_bullet.png')) , (25 , 10)) , -25)
+        self.speed = 14
+        self.rect = self.image.get_rect(midtop = pos)
+
+    def update(self):
+        self.rect.centerx += self.speed
+        self.rect.centery += self.speed / 2
+        self.timer += 1
+        if self.rect.left > WIDTH or self.rect.bottom < 0 or self.timer > 10:
+            self.kill()
+
+    def draw(self):
+        screen.blit(self.image , self.rect)
+
+class SniperBullet(pg.sprite.Sprite):
+    def __init__(self , pos , groups):
+        super().__init__(groups)
+        self.image = pg.transform.scale(pg.image.load(join('Assets/bullets_effects/rat_slayer_bullet.png')) , (40 , 10))
+        self.speed = 35
+        self.rect = self.image.get_rect(midleft = (pos))
+
+    def update(self):
+        self.rect.centerx += self.speed
+        if self.rect.left > WIDTH:
+            self.kill()
+
+    def draw(self):
+        screen.blit(self.image , self.rect)
+
+class Missile(pg.sprite.Sprite):
+    def __init__(self , pos , groups):
+        super().__init__(groups)
+        self.image = pg.transform.scale(pg.image.load(join('Assets/bullets_effects/ratzooka_missile.png')) , (112 , 28))
+        self.speed = 20
+        self.rect = self.image.get_rect(midleft = (pos))
+
+    def update(self):
+        self.rect.centerx += self.speed
+        if self.rect.left > WIDTH:
+            self.kill()
+
+    def draw(self):
+        screen.blit(self.image , self.rect)
+
+class MissileExplosion(pg.sprite.Sprite):
+    def __init__(self , pos , groups):
+        super().__init__(groups)
+        self.image = pg.transform.scale(pg.image.load(join('Assets/bullets_effects/fire.png')) , (200 , 60))
+        self.rect = self.image.get_rect(center = pos)
+        self.timer = 0
+        self.mask = pg.mask.from_surface(self.image)
+
+    def update(self):
+        self.timer += 1
+        if self.timer > 300:
+            self.kill()
+
+class AirWaveUp(pg.sprite.Sprite):
+    def __init__(self , pos , groups):
+        super().__init__(groups)
+        self.timer = 0
+        self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/bullets_effects/air_wave.png')) , (120 , 90)) , 90)
+        self.speed = 3
+        self.rect = self.image.get_rect(midbottom = (pos))
+
+    def update(self):
+        self.rect.centery -= self.speed
+        self.timer += 1
+        if self.timer > 45:
+            self.kill()
+
+    def draw(self):
+        screen.blit(self.image , self.rect)
+
+class AirWaveDown(pg.sprite.Sprite):
+    def __init__(self , pos , groups):
+        super().__init__(groups)
+        self.timer = 0
+        self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/bullets_effects/air_wave.png')) , (120 , 90)) , -90)
+        self.speed = 3
+        self.rect = self.image.get_rect(midtop = (pos))
+
+    def update(self):
+        self.rect.centery += self.speed
+        self.timer += 1
+        if self.timer > 45:
+            self.kill()
+
+    def draw(self):
+        screen.blit(self.image , self.rect)
+
 class Mouse(pg.sprite.Sprite):
-    def __init__(self , x , y , width , height , speed , image , groups):
+    def __init__(self , x , y , width , height , mouse , groups):
         super().__init__(groups)
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.image = pg.transform.scale(pg.image.load(join(image)) , (self.width , self.height))
+        self.mouse = mouse
+        if self.mouse == 'mouse':
+            self.image = pg.transform.scale(pg.image.load('Assets/mice/mouse.png') , (self.width , self.height))
+            self.hp_max = 50
+            self.speed = 6
         self.rect = self.image.get_rect()
         self.mask = pg.mask.from_surface(self.image)
         self.rect.x = self.x
         self.rect.y = self.y
-        self.speed = speed
         self.rotated = False
         self.cords = (self.x , self.y)
+
+        self.hp = self.hp_max
+        self.hp_ratio = self.hp_max / 100
 
     def update(self):
         for player in player_group:
@@ -293,7 +642,7 @@ class Mouse(pg.sprite.Sprite):
 
             else:
                 if self.y < player.rect.y:
-                    self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/mousetop.png')), (150 , 60)), 90)
+                    self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/mice/mousetop.png')), (150 , 60)), 90)
                     if self.rotated == False:
                         self.rect = self.image.get_rect(center = self.cords)
                         self.rect.centerx = 75
@@ -301,7 +650,7 @@ class Mouse(pg.sprite.Sprite):
                         self.rotated = True
                     self.rect.y += 2
                 else:
-                    self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/mousetop.png')), (150, 60)), -90)
+                    self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/mice/mousetop.png')), (150, 60)), -90)
                     if self.rotated == False:
                         self.rotated = True
                         self.rect = self.image.get_rect(center = self.cords)
@@ -314,23 +663,52 @@ class Mouse(pg.sprite.Sprite):
     def draw(self):
         screen.blit(self.image , self.rect)
 
-class Explosion(pg.sprite.Sprite):
+    def health_bar(self):
+        pg.draw.rect(screen , 'red' , (self.rect.left , self.rect.top - 8 , self.hp / self.hp_ratio , 10) , 0 , 4)
+        pg.draw.rect(screen, BLACK, (self.rect.left , self.rect.top - 8 , 100 , 10), 2, 4)
+
+        if self.hp <= 0:
+            self.kill()
+            mouse_death.play()
+
+    def damage(self , dmg):
+        self.hp -= dmg
+        if self.hp <= 0:
+            self.hp = 0
+
+class PoisonExplosion(pg.sprite.Sprite):
     def __init__(self , pos , groups):
         super().__init__(groups)
-        self.image = pg.image.load(join('Assets/explosion2.png'))
+        self.image = pg.image.load(join('Assets/bullets_effects/explosion2.png'))
         self.rect = self.image.get_rect(center = pos)
         self.timer = 0
 
     def update(self):
         self.timer += 1
-        if self.timer > 28:
+        if self.timer > 30:
             self.kill()
 
 class Trap(pg.sprite.Sprite):
-    def __init__(self , pos , groups):
+    def __init__(self , pos , trap , groups):
         super().__init__(groups)
-        self.image = pg.transform.scale(pg.image.load(join('Assets/poison_trap.webp')), (50 , 50))
+        self.trap = trap
+        if self.trap == 'poison_trap':
+            self.image = pg.transform.scale(pg.image.load(join('Assets/traps/poison_trap.webp')), (50 , 50))
+        elif self.trap == 'rat_trap':
+            self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/traps/trap_right.png')), (120 , 55)) , 10)
+        elif self.trap == 'glue_trap':
+            self.image = pg.transform.scale(pg.image.load(join('Assets/traps/glue_trap.png')), (125 , 60))
+        elif self.trap == 'parasite_trap':
+            self.image = pg.transform.scale(pg.image.load(join('Assets/traps/parasite_trap.png')), (50 , 50))
+        elif self.trap == 'fall_trap':
+            self.image = pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/traps/fall_trap.png')), (120 , 90)) , 8)
+        elif self.trap == 'shock_trap':
+            self.image = pg.transform.scale(pg.image.load(join('Assets/traps/shock_trap.png')), (100 , 60))
+        elif self.trap == 'spring_trap':
+            self.image = pg.transform.scale(pg.image.load(join('Assets/traps/spring_trap_inactive.png')), (50 , 75))
+
         self.rect = self.image.get_rect(center = pos)
+
 
     def draw(self):
         screen.blit(self.image , self.rect)
@@ -448,8 +826,39 @@ class Rectangle(pg.sprite.Sprite):
         else:
             pg.draw.rect(self.surface, self.colour, self.rect, self.side, self.eccentry)
 
+class Timer():
+    def __init__(self , frames):
+        self.frames = frames
+        self.done = True
+        self.count = 0
 
-def collisions():
+    def timer(self):
+        if not self.done:
+            self.count += 1
+            if self.count >= self.frames:
+                self.done = True
+                self.count = 0
+
+    def start(self):
+        self.done = False
+
+    def set_frames(self , frames):
+        self.frames = frames
+
+
+def double_click(key):
+    current_time = pg.time.get_ticks()
+
+    if key in last_press:
+        if current_time - last_press[key] <= 500:
+            last_press.pop(key)
+            print('Double')
+            return True
+
+    last_press[key] = current_time
+    return False
+
+def collisions(bullet_damage):
     global mouse_count
     for player in player_group:
         pl_collide = pg.sprite.spritecollide(player, mouse_entities , False)
@@ -460,26 +869,53 @@ def collisions():
                 game_over = True
                 gameover()
 
-
-    for laser in laser_entities:
-        collides = pg.sprite.spritecollide(laser , mouse_entities , True)
-        if collides:
-            mouse_death.play()
-            laser.kill()
-            mouse_count += 1
-
     for trap in trap_entities:
         coll = pg.sprite.spritecollide(trap , mouse_entities , False)
         if coll:
             trap_sound.play()
             trap.kill()
-            Explosion(trap.rect.center , (explosion_entities , all_entities))
+            PoisonExplosion(trap.rect.center , (explosion_entities , all_entities))
 
     for mouse in mouse_entities:
         collisisons = pg.sprite.spritecollide(mouse , explosion_entities , False)
         if collisisons:
             mouse.kill()
-            mouse_count += 1
+
+        fire_collision = pg.sprite.spritecollide(mouse, missile_explosions, False)
+        if fire_collision:
+            fire_collision_mask = pg.sprite.spritecollide(mouse, missile_explosions, False, pg.sprite.collide_mask)
+            if fire_collision_mask:
+                mouse.damage(0.2)
+
+        laser_collision = pg.sprite.spritecollide(mouse, laser_entities, True)
+        if laser_collision:
+            mouse.damage(bullet_damage)
+
+        bullet_collision = pg.sprite.spritecollide(mouse, normal_bullets, True)
+        if bullet_collision:
+            mouse.damage(bullet_damage)
+
+        shotgun_collision = pg.sprite.spritecollide(mouse, shotgun_shells, True)
+        if shotgun_collision:
+            mouse.damage(bullet_damage)
+
+        sniper_collision = pg.sprite.spritecollide(mouse, sniper_bullets, True)
+        if sniper_collision:
+            mouse.damage(bullet_damage)
+
+        missile_collision = pg.sprite.spritecollide(mouse, missile_entities, True)
+        if missile_collision:
+            MissileExplosion(mouse.rect.center, (missile_explosions, all_entities))
+            ratzooka_sound2.play()
+            mouse.damage(bullet_damage)
+
+        air_collision = pg.sprite.spritecollide(mouse , air_entities_up , False)
+        if air_collision:
+            mouse.rect.y -= 4
+
+        air_collision = pg.sprite.spritecollide(mouse, air_entities_down, False)
+        if air_collision:
+            mouse.rect.y += 4
 
 def menu():
     pg.mixer.music.stop()
@@ -487,11 +923,11 @@ def menu():
     game_over = False
 
     screen.blit(pg.transform.scale(pg.image.load(join('Assets/rat_poisonleft.png')), (400 , 400)), (740 , 350))
-    screen.blit(pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/cheeseleft.png')), (220 , 220)), -8), (700 , 520))
-    screen.blit(pg.transform.scale(pg.image.load(join('Assets/mouseright.png')), (400, 200)), (-120, 510))
-    screen.blit(pg.transform.scale(pg.image.load(join('Assets/mouseright.png')), (400 , 200)), (-20 , 565))
-    screen.blit(pg.transform.scale(pg.image.load(join('Assets/mouseright.png')), (400, 200)), (-140, 565))
-    screen.blit(pg.transform.scale(pg.image.load(join('Assets/mouseright.png')), (400, 200)), (-260, 565))
+    screen.blit(pg.transform.rotate(pg.transform.scale(pg.image.load(join('Assets/cheeses/cheeseleft.png')), (220 , 220)), -8), (700 , 520))
+    screen.blit(pg.transform.scale(pg.image.load(join('Assets/mice/mouseright.png')), (400, 200)), (-120, 510))
+    screen.blit(pg.transform.scale(pg.image.load(join('Assets/mice/mouseright.png')), (400 , 200)), (-20 , 565))
+    screen.blit(pg.transform.scale(pg.image.load(join('Assets/mice/mouseright.png')), (400, 200)), (-140, 565))
+    screen.blit(pg.transform.scale(pg.image.load(join('Assets/mice/mouseright.png')), (400, 200)), (-260, 565))
 
     menu_text = menu_font.render('Cheesy Situation' , 1 , BLACK)
     menu_rect1 = menu_text.get_rect(center = (WIDTH//2 , 130))
@@ -548,20 +984,24 @@ def menu():
         pg.display.flip()
 
 def play():
-    global mouse_count, highscore , high_score_notification , music , sound , pause_texts
+    global mouse_kills, highscore , high_score_notification , music , sound , pause_texts
     music_delay = 0
     menu_music.stop()
     screen.blit(floor , (-20 , -20))
     clock = pg.time.Clock()
     pause = False
-    player = Player((75 , HEIGHT//2) , 'Assets/cheese.png' , True , True , (all_entities , player_group))
-    gun = Gun(125 , HEIGHT//2 , 'Assets/rat_poison.png' , all_entities)
-    gun.image = pg.transform.rotate(gun.image , -10).convert_alpha()
+    player = Player((75 , HEIGHT//2) , 'parmesan' , True , (all_entities , player_group))
+    gun = Gun(125 , HEIGHT//2 , 'ratzooka' , player.speed , True , all_entities)
+    if gun.gun == 'rat_slayer':
+        sniper_melee_timer = Timer(gun.fire_cooldown)
+        melee_mice = 0
+        gun_original_image = pg.transform.scale(pg.image.load('Assets/guns/bayonet_right.png') , (190 , 70))
     total_score = 0
     highscore_num = 0
     play_num = 0
     game_over = False
-    mouse_count = 0
+    mouse_kills = 0
+    mouse_history = 0
     with open('score.txt' , 'w') as file:
         file.write('0')
 
@@ -633,19 +1073,19 @@ def play():
                 file.write(str(highscore))
             highscore_num += 1
 
-        if 200 <= total_score <= 600:
-            player.total_time_laser = 40
-            player.total_time_trap = 200
-        elif 600 <= total_score <= 1300:
-            player.speed = 7
-            gun.speed = 7
-            player.total_time_laser = 25
-            player.total_time_trap = 150
-            player.trap_limit = 2
-        elif 1300 <= total_score:
-            player.total_time_laser = 20
-            player.total_time_trap = 100
-            player.trap_limit = 4
+        # if 200 <= total_score <= 600:
+        #     player.reload_time = 40
+        #     player.total_time_trap = 200
+        # elif 600 <= total_score <= 1300:
+        #     player.speed = 7
+        #     gun.speed = 7
+        #     player.reload_time = 25
+        #     player.total_time_trap = 150
+        #     player.trap_limit = 2
+        # elif 1300 <= total_score:
+        #     player.reload_time = 20
+        #     player.total_time_trap = 100
+        #     player.trap_limit = 4
 
 
         if pause:
@@ -672,15 +1112,55 @@ def play():
                     else:
                         pause = True
                         pg.mixer.music.pause()
-                if event.key == controls['fire'] and player.can_shoot:
-                    laser_sound.play()
-                    laser = Laser(player.rect.midright, (all_entities, laser_entities))
-                    player.can_shoot = False
+                if event.key == controls['fire'] and gun.can_shoot and not gun.cooldown:
+                    if gun.gun == 'rat_poison':
+                        laser_sound.play()
+                        laser = Laser(gun.rect.midright , (all_entities, laser_entities))
+                        gun.magazine -= 1
+                    elif gun.gun == 'rat_killers' or gun.gun == 'ratata':
+                        bullet_sound.play()
+                        bullet = NormalBullet(gun.rect.midright, (all_entities, normal_bullets))
+                        gun.magazine -= 1
+                    elif gun.gun == 'rat_buster':
+                        shotgun_sound.play()
+                        bullet = ShotgunBulletMid(gun.rect.midright, (all_entities, shotgun_shells))
+                        bullet1 = ShotgunBulletTop(bullet.rect.midtop , (all_entities , shotgun_shells))
+                        bullet2 = ShotgunBulletBottom(bullet.rect.midbottom, (all_entities, shotgun_shells))
+                        gun.magazine -= 1
+                    elif gun.gun == 'rat_slayer':
+                        for mouse in mouse_entities:
+                            distance = mouse.rect.centery - player.rect.centery
+                            if abs(distance) < 250 and mouse.rect.centerx < 100:
+                                mouse.kill()
+                                mouse_death.play()
+                                sniper_melee_timer.start()
+                                gun.melee = True
+                                if distance > 0:
+                                    gun.rotate('down' , 67)
+                                elif distance < 0:
+                                    gun.rotate('up' , 67)
+                                melee_mice = 1
+                                break
+                        if melee_mice == 0:
+                            rat_slayer_sound.play()
+                            bullet = SniperBullet(gun.rect.midright, (all_entities, sniper_bullets))
+                            gun.magazine -= 1
+                        melee_mice = 0
+                    elif gun.gun == 'ratzooka':
+                        ratzooka_sound1.play()
+                        bullet = Missile(gun.rect.midright, (all_entities, missile_entities))
+                        AirWaveUp(player.rect.midtop , (all_entities , air_entities_up))
+                        AirWaveDown(player.rect.midbottom, (all_entities, air_entities_down))
+                        gun.magazine -= 1
+                    gun.cooldown = True
 
-                if event.key == controls['action'] and player.bomb and len(trap_entities) < player.trap_limit and total_score > 200:
-                    trap = Trap(player.rect.center , (trap_entities , all_entities))
+
+                if event.key == controls['action'] and player.bomb and len(trap_entities) < player.trap_limit:
+                    trap = Trap(player.rect.center , 'poison_trap', trap_entities)
                     player.bomb = False
 
+                if event.key == controls['reload'] and gun.can_shoot:
+                    gun.can_shoot = False
 
             if event.type == pg.MOUSEBUTTONDOWN and pause:
                 if event.button == 1:
@@ -701,36 +1181,41 @@ def play():
                 if not pause:
                     mouse_y = randint(30, 640)
                     mouse_speed = randint(2 , 5)
-                    enemy = Mouse(900 , mouse_y , mouse_width , mouse_height , mouse_speed , mouse_image , (all_entities , mouse_entities))
+                    enemy = Mouse(900 , mouse_y , mouse_width , mouse_height , 'mouse' , (all_entities , mouse_entities))
                     mouse_spawn.play()
+                    mouse_history += 1
 
             if event.type == mouse_event2 and 200 < total_score < 600:
                 if not pause:
                     mouse_y = randint(30, 640)
                     mouse_speed = randint(3, 6)
-                    enemy = Mouse(900 , mouse_y , mouse_width , mouse_height , mouse_speed , mouse_image , (all_entities , mouse_entities))
+                    enemy = Mouse(900 , mouse_y , mouse_width , mouse_height , 'mouse' , (all_entities , mouse_entities))
                     mouse_spawn.play()
+                    mouse_history += 1
 
             if event.type == mouse_event3 and 600 < total_score < 1300:
                 if not pause:
                     mouse_y = randint(30, 640)
                     mouse_speed = randint(4, 7)
-                    enemy = Mouse(900, mouse_y, mouse_width, mouse_height, mouse_speed, mouse_image, (all_entities, mouse_entities))
+                    enemy = Mouse(900, mouse_y, mouse_width, mouse_height, 'mouse', (all_entities, mouse_entities))
                     mouse_spawn.play()
+                    mouse_history += 1
 
             if event.type == mouse_event4 and 1300 < total_score < 2000:
                 if not pause:
                     mouse_y = randint(30, 640)
                     mouse_speed = randint(6, 9)
-                    enemy = Mouse(900, mouse_y, mouse_width, mouse_height, mouse_speed, mouse_image, (all_entities, mouse_entities))
+                    enemy = Mouse(900, mouse_y, mouse_width, mouse_height, 'mouse', (all_entities, mouse_entities))
                     mouse_spawn.play()
+                    mouse_history += 1
 
             if event.type == mouse_event4 and 2000 < total_score:
                 if not pause:
                     mouse_y = randint(30, 640)
                     mouse_speed = randint(8, 12)
-                    enemy = Mouse(900, mouse_y, mouse_width, mouse_height, mouse_speed, mouse_image, (all_entities, mouse_entities))
+                    enemy = Mouse(900, mouse_y, mouse_width, mouse_height, 'mouse', (all_entities, mouse_entities))
                     mouse_spawn.play()
+                    mouse_history += 1
 
         if not pause and not game_over:
             screen.blit(floor, (-20, -20))
@@ -750,11 +1235,25 @@ def play():
                 screen.blit(stage5, stage5_rect)
                 screen.blit(stage5_text, stage5_text_rect)
 
+            print(gun.magazine)
+            if gun.gun == "rat_slayer":
+                sniper_melee_timer.timer()
+                if gun.melee and sniper_melee_timer.done:
+                    gun.rotate('right' , player.rect.centery)
+                    gun.melee = False
+
+            if mouse_history > len(mouse_entities):
+                mouse_kills += 1
+                mouse_history -= 1
             play_num += 1
+            trap_entities.draw(screen)
             all_entities.update()
             all_entities.draw(screen)
-            collisions()
-            player.fire_timer()
+            collisions(gun.damage)
+            for mouse in mouse_entities:
+                mouse.health_bar()
+            gun.fire_timer()
+            player.place_timer()
             screen.blit(score_text, (0, 0))
             # for mouse in mouse_entities:
             #     pg.draw.rect(screen , 'green' , mouse.rect)
@@ -903,6 +1402,7 @@ def keybinds():
     down_text = PresetText('down' , (WIDTH//2 , 260) , preset_texts)
     fire_text = PresetText('fire' , (WIDTH//2 , 300) , preset_texts)
     action_text = PresetText('action' , (WIDTH//2 , 340) , preset_texts)
+    reload_text = PresetText('reload' , (WIDTH//2 , 380) , preset_texts)
 
     back_button = Button(150, 60, WIDTH // 2, 650, 'BACK')
     reset_button = Button(300, 60, WIDTH // 2, 580, 'RESET BINDS')
@@ -999,7 +1499,7 @@ def keybinds():
         pg.display.flip()
 
 def gameover():
-    global highscore , mouse_count , high_score_notification
+    global highscore , mouse_kills , high_score_notification
     game_over = True
     pg.mixer.music.stop()
     while game_over:
@@ -1042,7 +1542,7 @@ def gameover():
         with open('score.txt' , 'r') as file:
             score = int(file.read())
         score_text = gameover_text_font.render('Score :   ' + str(score) , 1 , WHITE)
-        kills_text = gameover_text_font.render('Mice Killed :   ' + str(mouse_count) , 1 , WHITE)
+        kills_text = gameover_text_font.render('Mice Killed :   ' + str(mouse_kills) , 1 , WHITE)
         highscore_text = gameover_text_font2.render('! NEW BEST !   ' , 1 , LIGHT_BLUE)
         if not high_score_notification:
             surface2.blit(kills_text , (370 , 300))
